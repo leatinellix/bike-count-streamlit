@@ -1,0 +1,12 @@
+data_paths:
+  train: data/train.parquet
+  predictions_glob: prediction_csvs/*.csv
+
+columns:
+  datetime: date
+  target: log_bike_count
+  station: site_id
+
+time:
+  timezone: Europe/Paris
+  freq: H
