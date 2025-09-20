@@ -1,0 +1,10 @@
+.venv
+__pycache__/
+*.pyc
+.git
+.github
+data/
+external_data/
+models/
+prediction_csvs/
+tests/
