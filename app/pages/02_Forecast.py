@@ -3,8 +3,15 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
+
 from src.data_io import load_dataframe, ensure_required_columns
-from src.modeling import train, predict, DT, Y, SITE
+from src.modeling import build_pipeline, train, predict, DT, Y, SITE
+from src.optimize import optimize_xgb
+
+
 
 st.set_page_config(page_title="Bike Paris — Forecast", layout="wide")
 st.title("Forecast")
@@ -49,36 +56,64 @@ with colB:
 try:
     df_train = get_train()
 except Exception as e:
-    st.error(f"Impossible de charger {TRAIN_PATH}: {e}")
+    st.error(f"Impossible to load {TRAIN_PATH}: {e}")
     st.stop()
 
 # Optionnel: subset pour la démo (évite d'entraîner/afficher sur trop gros)
-st.caption(f"Train: {len(df_train):,} lignes")
+st.caption(f"Train: {len(df_train):,} lines")
+
+# Sidebar (place this ABOVE the Train/Predict buttons)
+DEFAULT_CUTOFF = pd.Timestamp("2021-05-01")
+
+cutoff = st.date_input(
+    "Time split cutoff (train ≤ cutoff < valid)",
+    value=DEFAULT_CUTOFF.date()
+)
+cutoff_ts = pd.Timestamp(cutoff)
+
+st.markdown("### Hyperparameter search (Optuna)")
+colO1, colO2, colO3 = st.columns([1,1,2])
+with colO1:
+    n_trials = st.slider("n_trials", 10, 100, 30, 5)
+with colO2:
+    cutoff_opt = st.date_input("Cutoff", value=pd.to_datetime("2021-05-01"))
+with colO3:
+    st.caption("Recherche = +lent. Utilise un split temporel pour éviter la fuite.")
+
+if st.button("Run Optuna"):
+    from src.optimize import optimize_xgb
+    with st.spinner("Optuna loading…"):
+        best_params, best_mae = optimize_xgb(df_train, pd.Timestamp(cutoff_opt), n_trials=n_trials)
+    st.success(f"Best MAE(log): {best_mae:.3f}")
+    st.json(best_params)
+    st.session_state["best_params"] = best_params
+
 
 # Entraînement
 if st.button("Train model", type="primary"):
-    # On reconstruit la pipeline avec le nouveau nb d'arbres si besoin
-    from src.modeling import build_pipeline
-    pipe = build_pipeline()
-    # override n_estimators dynamiquement
-    pipe.named_steps["xgb"].set_params(n_estimators=n_estimators)
+    params = st.session_state.get("best_params", None)
+    pipe = build_pipeline(params or {"n_estimators": n_estimators})
 
-    st.write("Entraînement en cours…")
-    st.session_state["model"] = train(df_train)
-    # NOTE: train() construit sa propre pipeline; pour respecter le slider,
-    # remplace-le par pipe.fit(...) si tu veux appliquer n_estimators du slider:
-    # model = pipe.fit(df_train.drop(columns=[Y]), df_train[Y]); st.session_state["model"] = model
+    df_sorted = df_train.sort_values(DT)
+    train_df = df_sorted[df_sorted[DT] <= cutoff_ts].copy()
+    valid_df = df_sorted[df_sorted[DT] >  cutoff_ts].copy()
 
-    st.success("Modèle entraîné (XGBoost)")
+    y_train = train_df[Y]
+    model = pipe.fit(train_df.drop(columns=[Y]), y_train)
+    st.session_state["model"] = model
+    st.session_state["valid_df"] = valid_df
+    st.success(f"Model trained ✅ — train: {len(train_df):,} | valid: {len(valid_df):,}")
+
+
 
 # Prédiction
 if st.button("Predict"):
     if "model" not in st.session_state:
-        st.error("Entraîne d'abord le modèle.")
+        st.error("First train the model.")
     else:
         model = st.session_state["model"]
 
-        if src == "Subset du train (démo)":
+        if src == "Subset":
             # On prend une petite fenêtre récente pour visualiser
             df_sub = df_train.sort_values(DT).tail(200).copy()
             y_pred = predict(model, df_sub)
@@ -87,7 +122,7 @@ if st.button("Predict"):
             if Y in df_sub.columns:
                 out["y_true"] = df_sub[Y].values
 
-            st.subheader("Observé vs Prédit (subset train)")
+            st.subheader("Observed vs predicted (subset train)")
             st.dataframe(out.head(30))
             cols = ["y_pred"] + (["y_true"] if "y_true" in out.columns else [])
             st.line_chart(out.set_index(DT)[cols])
@@ -106,16 +141,16 @@ if st.button("Predict"):
             try:
                 df_test = get_final_test()
             except Exception as e:
-                st.error(f"Impossible de charger {TEST_PATH}: {e}")
+                st.error(f"Impossible to load {TEST_PATH}: {e}")
             else:
                 y_pred = predict(model, df_test)
                 sub = pd.DataFrame({"log_bike_count": y_pred})
                 sub.index.name = "Id"
 
-                st.subheader("Aperçu de la soumission")
+                st.subheader("Submission preview")
                 st.dataframe(sub.head(20))
 
                 csv = sub.to_csv().encode("utf-8")
-                st.download_button("⬇️ Télécharger le CSV pour Kaggle",
+                st.download_button("Download CSV",
                                    data=csv, file_name="kaggle_submission.csv", mime="text/csv")
-                st.success(f"{len(sub):,} lignes prêtes pour soumission.")
+                st.success(f"{len(sub):,} lines ready for submission.")

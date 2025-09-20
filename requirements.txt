@@ -7,3 +7,6 @@ pyarrow==15.0.0
 pytest==8.2.1
 python-dateutil==2.9.0.post0
 PyYAML==6.0.2
+
+optuna==3.6.1
+altair==5.3.0

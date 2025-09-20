@@ -8,3 +8,10 @@ models/
 .DS_Store
 .vscode/
 .idea/
+.venv/
+__pycache__/
+.DS_Store
+data/
+models/
+prediction_csvs/
+external_data/
