@@ -151,31 +151,34 @@ docker run --rm -it -p 8501:8501 \
 
 ## Project structure
 
+```text
 bike-count-streamlit/
 ├─ app/
-│ ├─ app.py
-│ └─ pages/
-│ └─ 02_Forecast.py
+│  ├─ app.py
+│  └─ pages/
+│     └─ 02_Forecast.py
 ├─ src/
-│ ├─ data_io.py
-│ ├─ filtering.py
-│ ├─ modeling.py
-│ └─ geo.py
+│  ├─ data_io.py
+│  ├─ filtering.py
+│  ├─ modeling.py
+│  └─ geo.py
 ├─ tests/
-│ ├─ test_data_io.py
-│ ├─ test_filtering.py
-│ └─ test_geo.py
+│  ├─ test_data_io.py
+│  ├─ test_filtering.py
+│  └─ test_geo.py
 ├─ scripts/
-│ └─ build_site_coords.py
+│  └─ build_site_coords.py
 ├─ external_data/
-│ └─ site_coords.csv
+│  └─ site_coords.csv
 ├─ .github/
-│ └─ workflows/
-│ └─ ci.yml
+│  └─ workflows/
+│     └─ ci.yml
 ├─ requirements.txt
 ├─ Dockerfile
 ├─ .dockerignore
 └─ README.md
+```
+
 
 
 
